@@ -16,6 +16,8 @@
         .tab-btn.active { border-bottom: 4px solid white; color: white; opacity: 1; }
         #map { height: 400px; border-radius: 1rem; z-index: 10; }
         
+        .custom-soil-marker { background: none; border: none; }
+
         /* Dark Mode Utility */
         .dark body { background-color: #0f172a; color: #f8fafc; }
         .dark .bg-white { background-color: #1e293b; color: #f8fafc; border-color: #334155; }
@@ -144,13 +146,29 @@
                 <h3 class="text-lg font-bold mb-4 text-green-800 border-b pb-2 italic">📍 เก็บข้อมูลแผนที่แปลงเกษตร</h3>
                 <div id="map" class="mb-4"></div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <!-- ข้อมูลดินปัจจุบัน (แสดงค่าที่จะบันทึก) -->
+                <div class="bg-green-50 p-4 rounded-xl border border-green-200 mb-4">
+                    <p class="text-xs font-bold text-green-700 mb-2">ข้อมูลดินปัจจุบัน (จะบันทึกพร้อมตำแหน่ง):</p>
+                    <div class="grid grid-cols-4 gap-2 text-center">
+                        <div class="bg-white rounded-lg p-2"><p class="text-[9px] text-slate-400 uppercase">N</p><p id="mapValN" class="text-sm font-black">--</p></div>
+                        <div class="bg-white rounded-lg p-2"><p class="text-[9px] text-slate-400 uppercase">P</p><p id="mapValP" class="text-sm font-black">--</p></div>
+                        <div class="bg-white rounded-lg p-2"><p class="text-[9px] text-slate-400 uppercase">K</p><p id="mapValK" class="text-sm font-black">--</p></div>
+                        <div class="bg-white rounded-lg p-2"><p class="text-[9px] text-slate-400 uppercase">pH</p><p id="mapValPH" class="text-sm font-black">--</p></div>
+                    </div>
+                    <p class="text-[10px] text-green-600 mt-2">* ปรับค่าได้ที่แท็บแดชบอร์ด (Simulation)</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <div>
                         <label class="block text-sm font-bold text-slate-600 mb-1">ชื่อเรียกพื้นที่:</label>
                         <input type="text" id="locationName" placeholder="เช่น แปลงทุเรียน 1, หน้าบ้าน" class="w-full p-2 bg-white border rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500">
                     </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-1">พืชที่ปลูก:</label>
+                        <select id="mapCropSelect" class="w-full p-2 bg-white border rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500"></select>
+                    </div>
                     <div class="flex items-end">
-                        <button onclick="saveLocation()" class="w-full py-2 bg-green-700 text-white rounded-lg font-bold hover:bg-green-800 transition-all shadow-md">บันทึกตำแหน่งนี้</button>
+                        <button onclick="saveLocation()" class="w-full py-2 bg-green-700 text-white rounded-lg font-bold hover:bg-green-800 transition-all shadow-md">บันทึกตำแหน่งพร้อมข้อมูลดิน</button>
                     </div>
                 </div>
             </div>

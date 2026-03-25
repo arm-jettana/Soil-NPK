@@ -12,8 +12,9 @@ const DEFAULT_CROPS = {
 
 let cropDatabase = JSON.parse(localStorage.getItem('cropDatabase')) || DEFAULT_CROPS;
 let savedLocations = JSON.parse(localStorage.getItem('savedLocations')) || [];
-let sensorData = { n: 15, p: 50, k: 90, ph: 5.2 }; 
+let sensorData = { n: 15, p: 50, k: 90, ph: 5.2 };
 let chart, map, marker;
+let allMarkers = []; // เก็บ markers ทั้งหมดของตำแหน่งที่บันทึก
 
 // --- ระบบสลับแท็บ ---
 function switchTab(tabName) {
@@ -27,7 +28,10 @@ function switchTab(tabName) {
     if(tabName === 'mapTab') {
         initMap();
         if (map) setTimeout(() => map.invalidateSize(), 100);
+        updateMapCropSelector();
+        updateMapSoilDisplay();
         renderSavedLocations();
+        renderAllMapMarkers();
     }
 }
 
@@ -66,40 +70,175 @@ function saveLocation() {
     if (!marker) return alert('กรุณาคลิกเลือกตำแหน่งบนแผนที่ก่อนบันทึก');
 
     const latlng = marker.getLatLng();
+    const cropKey = document.getElementById('mapCropSelect')
+        ? document.getElementById('mapCropSelect').value
+        : document.getElementById('cropSelect').value;
+
     const newLoc = {
         id: Date.now(),
         name: name,
         lat: latlng.lat,
         lng: latlng.lng,
-        timestamp: new Date().toLocaleString('th-TH')
+        timestamp: new Date().toLocaleString('th-TH'),
+        soilData: { ...sensorData },
+        cropKey: cropKey,
+        cropName: cropDatabase[cropKey] ? cropDatabase[cropKey].name : '--'
     };
 
     savedLocations.push(newLoc);
     localStorage.setItem('savedLocations', JSON.stringify(savedLocations));
-    
+
     document.getElementById('locationName').value = '';
     renderSavedLocations();
-    alert('บันทึกตำแหน่งเรียบร้อยแล้ว');
+    renderAllMapMarkers();
+    alert('บันทึกตำแหน่งพร้อมข้อมูลดินเรียบร้อยแล้ว');
+}
+
+function updateLocationSoilData(id) {
+    const loc = savedLocations.find(l => l.id === id);
+    if (!loc) return;
+
+    const cropKey = document.getElementById('mapCropSelect')
+        ? document.getElementById('mapCropSelect').value
+        : document.getElementById('cropSelect').value;
+
+    loc.soilData = { ...sensorData };
+    loc.cropKey = cropKey;
+    loc.cropName = cropDatabase[cropKey] ? cropDatabase[cropKey].name : '--';
+    loc.timestamp = new Date().toLocaleString('th-TH');
+
+    localStorage.setItem('savedLocations', JSON.stringify(savedLocations));
+    renderSavedLocations();
+    renderAllMapMarkers();
+    alert(`อัปเดตข้อมูลดินของ "${loc.name}" เรียบร้อยแล้ว`);
+}
+
+function loadLocationToDashboard(id) {
+    const loc = savedLocations.find(l => l.id === id);
+    if (!loc || !loc.soilData) return alert('ตำแหน่งนี้ยังไม่มีข้อมูลดิน');
+
+    sensorData = { ...loc.soilData };
+
+    // อัปเดต sliders
+    document.getElementById('simN').value = sensorData.n;
+    document.getElementById('simP').value = sensorData.p;
+    document.getElementById('simK').value = sensorData.k;
+    document.getElementById('simPH').value = sensorData.ph;
+
+    // เลือกพืชที่ตรงกับข้อมูล
+    if (loc.cropKey && cropDatabase[loc.cropKey]) {
+        document.getElementById('cropSelect').value = loc.cropKey;
+    }
+
+    switchTab('dashboard');
+    updateDashboardUI();
+}
+
+function getSoilHealthColor(loc) {
+    if (!loc.soilData || !loc.cropKey || !cropDatabase[loc.cropKey]) return '#6b7280'; // สีเทา
+    const opt = cropDatabase[loc.cropKey];
+    const d = loc.soilData;
+    const issues = [
+        d.n < opt.n.min || d.n > opt.n.max,
+        d.p < opt.p.min || d.p > opt.p.max,
+        d.k < opt.k.min || d.k > opt.k.max,
+        d.ph < opt.ph.min || d.ph > opt.ph.max
+    ].filter(Boolean).length;
+
+    if (issues === 0) return '#16a34a'; // เขียว - ดีเยี่ยม
+    if (issues <= 2) return '#f59e0b'; // เหลือง - ปานกลาง
+    return '#ef4444'; // แดง - ต้องปรับปรุง
+}
+
+function renderAllMapMarkers() {
+    if (!map) return;
+
+    // ลบ markers เก่าทั้งหมด
+    allMarkers.forEach(m => map.removeLayer(m));
+    allMarkers = [];
+
+    savedLocations.forEach(loc => {
+        const color = getSoilHealthColor(loc);
+        const icon = L.divIcon({
+            className: 'custom-soil-marker',
+            html: `<div style="
+                width: 28px; height: 28px;
+                background: ${color};
+                border: 3px solid white;
+                border-radius: 50%;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                display: flex; align-items: center; justify-content: center;
+                font-size: 12px; color: white; font-weight: bold;
+            ">🌱</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+        });
+
+        const soilInfo = loc.soilData
+            ? `<b>N:</b> ${loc.soilData.n} | <b>P:</b> ${loc.soilData.p} | <b>K:</b> ${loc.soilData.k} | <b>pH:</b> ${loc.soilData.ph}`
+            : 'ไม่มีข้อมูลดิน';
+
+        const popupContent = `
+            <div style="font-family: Sarabun, sans-serif; min-width: 180px;">
+                <b style="font-size: 14px;">${loc.name}</b><br>
+                <span style="font-size: 11px; color: #666;">🌾 ${loc.cropName || '--'}</span><br>
+                <hr style="margin: 4px 0;">
+                <span style="font-size: 11px;">${soilInfo}</span><br>
+                <span style="font-size: 10px; color: #999;">🕒 ${loc.timestamp}</span>
+            </div>
+        `;
+
+        const m = L.marker([loc.lat, loc.lng], { icon }).addTo(map);
+        m.bindPopup(popupContent);
+        allMarkers.push(m);
+    });
 }
 
 function renderSavedLocations() {
     const list = document.getElementById('savedLocationsList');
     if (!list) return;
-    
+
     list.innerHTML = '';
     savedLocations.forEach(loc => {
+        const hasSoil = loc.soilData;
+        const color = getSoilHealthColor(loc);
+        const statusLabel = !hasSoil ? 'ไม่มีข้อมูล'
+            : color === '#16a34a' ? 'สมบูรณ์ดี'
+            : color === '#f59e0b' ? 'ปานกลาง'
+            : 'ต้องปรับปรุง';
+        const statusBg = !hasSoil ? 'bg-slate-100 text-slate-500'
+            : color === '#16a34a' ? 'bg-green-100 text-green-700'
+            : color === '#f59e0b' ? 'bg-amber-100 text-amber-700'
+            : 'bg-rose-100 text-rose-700';
+
         list.innerHTML += `
-            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 hover:border-green-500 transition-all group">
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 hover:border-green-500 transition-all group" style="border-left: 4px solid ${color};">
                 <div class="flex justify-between items-start mb-2">
-                    <h4 class="font-bold text-slate-800">${loc.name}</h4>
+                    <div>
+                        <h4 class="font-bold text-slate-800">${loc.name}</h4>
+                        <span class="text-[10px] ${statusBg} px-2 py-0.5 rounded-full font-bold">${statusLabel}</span>
+                    </div>
                     <button onclick="deleteLocation(${loc.id})" class="text-rose-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                     </button>
                 </div>
+                ${hasSoil ? `
+                <div class="grid grid-cols-4 gap-1 my-2 text-center">
+                    <div class="bg-white rounded p-1"><p class="text-[8px] text-slate-400 uppercase">N</p><p class="text-xs font-bold">${loc.soilData.n}</p></div>
+                    <div class="bg-white rounded p-1"><p class="text-[8px] text-slate-400 uppercase">P</p><p class="text-xs font-bold">${loc.soilData.p}</p></div>
+                    <div class="bg-white rounded p-1"><p class="text-[8px] text-slate-400 uppercase">K</p><p class="text-xs font-bold">${loc.soilData.k}</p></div>
+                    <div class="bg-white rounded p-1"><p class="text-[8px] text-slate-400 uppercase">pH</p><p class="text-xs font-bold">${loc.soilData.ph}</p></div>
+                </div>
+                <p class="text-[10px] text-slate-400 mb-1">🌾 ${loc.cropName || '--'}</p>
+                ` : ''}
                 <p class="text-[10px] text-slate-400 mb-3">📍 ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}<br>🕒 ${loc.timestamp}</p>
-                <button onclick="flyToLocation(${loc.lat}, ${loc.lng})" class="w-full py-1.5 text-xs bg-white border border-green-600 text-green-700 rounded-lg font-bold hover:bg-green-50 transition-all">ดูบนแผนที่</button>
+                <div class="flex gap-2">
+                    <button onclick="flyToLocation(${loc.lat}, ${loc.lng})" class="flex-1 py-1.5 text-xs bg-white border border-green-600 text-green-700 rounded-lg font-bold hover:bg-green-50 transition-all">ดูบนแผนที่</button>
+                    <button onclick="loadLocationToDashboard(${loc.id})" class="flex-1 py-1.5 text-xs bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-all" ${!hasSoil ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>โหลดเข้า Dashboard</button>
+                </div>
+                <button onclick="updateLocationSoilData(${loc.id})" class="w-full mt-2 py-1.5 text-xs bg-slate-200 text-slate-600 rounded-lg font-bold hover:bg-slate-300 transition-all">อัปเดตข้อมูลดินปัจจุบัน</button>
             </div>
         `;
     });
@@ -109,11 +248,34 @@ function renderSavedLocations() {
     }
 }
 
+function updateMapSoilDisplay() {
+    const el = (id) => document.getElementById(id);
+    if (el('mapValN')) el('mapValN').innerText = sensorData.n;
+    if (el('mapValP')) el('mapValP').innerText = sensorData.p;
+    if (el('mapValK')) el('mapValK').innerText = sensorData.k;
+    if (el('mapValPH')) el('mapValPH').innerText = sensorData.ph;
+}
+
+function updateMapCropSelector() {
+    const el = document.getElementById('mapCropSelect');
+    if (!el) return;
+    const currentVal = el.value;
+    el.innerHTML = '';
+    for (let key in cropDatabase) {
+        el.innerHTML += `<option value="${key}">${cropDatabase[key].name}</option>`;
+    }
+    // sync กับ dashboard crop select
+    const dashCrop = document.getElementById('cropSelect').value;
+    if (dashCrop && cropDatabase[dashCrop]) el.value = dashCrop;
+    else if (currentVal && cropDatabase[currentVal]) el.value = currentVal;
+}
+
 function deleteLocation(id) {
     if (!confirm('ยืนยันการลบตำแหน่งนี้?')) return;
     savedLocations = savedLocations.filter(l => l.id !== id);
     localStorage.setItem('savedLocations', JSON.stringify(savedLocations));
     renderSavedLocations();
+    renderAllMapMarkers();
 }
 
 function flyToLocation(lat, lng) {
