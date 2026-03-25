@@ -6,12 +6,24 @@
     <title>DSS Smart Farm - Precision Settings Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Sarabun', sans-serif; }
+        body { font-family: 'Sarabun', sans-serif; transition: background-color 0.3s, color 0.3s; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         .tab-btn.active { border-bottom: 4px solid white; color: white; opacity: 1; }
+        #map { height: 400px; border-radius: 1rem; z-index: 10; }
+        
+        /* Dark Mode Utility */
+        .dark body { background-color: #0f172a; color: #f8fafc; }
+        .dark .bg-white { background-color: #1e293b; color: #f8fafc; border-color: #334155; }
+        .dark .text-slate-800 { color: #f1f5f9; }
+        .dark .bg-slate-50 { background-color: #0f172a; }
+        .dark .bg-slate-100 { background-color: #334155; color: #f1f5f9; }
+        .dark .bg-slate-50.border { border-color: #475569; }
+        .dark select, .dark input { background-color: #334155; color: white; border-color: #475569; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -22,9 +34,13 @@
                 <img src="image_0.png" alt="Logo" class="h-10 w-10 bg-white rounded-full p-1">
                 <span class="font-bold text-lg tracking-tight font-black">🌱 SmartFarm DSS</span>
             </div>
-            <div class="flex gap-4">
-                <button onclick="switchTab('dashboard')" id="btn-dashboard" class="tab-btn active opacity-90 font-bold py-2 px-2 transition-all text-sm sm:text-base">แดชบอร์ด</button>
-                <button onclick="switchTab('settings')" id="btn-settings" class="tab-btn opacity-70 font-bold py-2 px-2 transition-all text-sm sm:text-base">ตั้งค่ามาตรฐาน</button>
+            <div class="flex items-center gap-2 sm:gap-4">
+                <button onclick="switchTab('dashboard')" id="btn-dashboard" class="tab-btn active opacity-90 font-bold py-2 px-2 transition-all text-xs sm:text-base">แดชบอร์ด</button>
+                <button onclick="switchTab('mapTab')" id="btn-mapTab" class="tab-btn opacity-70 font-bold py-2 px-2 transition-all text-xs sm:text-base">แผนที่</button>
+                <button onclick="switchTab('settings')" id="btn-settings" class="tab-btn opacity-70 font-bold py-2 px-2 transition-all text-xs sm:text-base">ตั้งค่า</button>
+                <button onclick="toggleDarkMode()" class="p-2 rounded-full hover:bg-green-600 transition-all" title="สลับโหมด">
+                    <span id="darkIcon">🌙</span>
+                </button>
             </div>
         </div>
     </nav>
@@ -32,24 +48,27 @@
     <main class="container mx-auto p-4 md:p-8">
         
         <div id="dashboard" class="tab-content active space-y-6">
-            <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+            <div class="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
                 <h2 class="text-xl font-extrabold text-slate-800 italic">พืช: <span id="currentCropName" class="text-green-600">--</span></h2>
-                <select id="cropSelect" onchange="updateDashboardUI()" class="bg-slate-100 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500"></select>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-bold text-slate-400">เลือกพืช:</label>
+                    <select id="cropSelect" onchange="updateDashboardUI()" class="bg-slate-100 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500"></select>
+                </div>
             </div>
 
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div id="cardN" class="bg-white p-6 rounded-2xl shadow-sm border-b-8 transition-all">
-                    <p class="text-[10px] font-black text-slate-400 uppercase">Nitrogen</p>
+                    <p class="text-[10px] font-black text-slate-400 uppercase">Nitrogen (N)</p>
                     <h4 class="text-4xl font-black italic"><span id="valN">--</span></h4>
                     <p id="rangeN" class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full mt-3 inline-block">--</p>
                 </div>
                 <div id="cardP" class="bg-white p-6 rounded-2xl shadow-sm border-b-8 transition-all">
-                    <p class="text-[10px] font-black text-slate-400 uppercase">Phosphorus</p>
+                    <p class="text-[10px] font-black text-slate-400 uppercase">Phosphorus (P)</p>
                     <h4 class="text-4xl font-black italic"><span id="valP">--</span></h4>
                     <p id="rangeP" class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full mt-3 inline-block">--</p>
                 </div>
                 <div id="cardK" class="bg-white p-6 rounded-2xl shadow-sm border-b-8 transition-all">
-                    <p class="text-[10px] font-black text-slate-400 uppercase">Potassium</p>
+                    <p class="text-[10px] font-black text-slate-400 uppercase">Potassium (K)</p>
                     <h4 class="text-4xl font-black italic"><span id="valK">--</span></h4>
                     <p id="rangeK" class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full mt-3 inline-block">--</p>
                 </div>
@@ -60,28 +79,99 @@
                 </div>
             </div>
 
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- เครื่องคำนวณปุ๋ย -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-slate-800 mb-4 italic flex items-center gap-2">
+                        <span class="bg-green-100 p-2 rounded-lg">🧮</span> เครื่องคำนวณปุ๋ยอัจฉริยะ
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-400 uppercase">สูตรปุ๋ยที่มี (N-P-K)</label>
+                                <select id="fertilizerFormula" class="w-full p-2 bg-slate-50 border rounded-lg text-sm">
+                                    <option value="46-0-0">46-0-0 (ยูเรีย)</option>
+                                    <option value="16-16-16">16-16-16 (สูตรเสมอ)</option>
+                                    <option value="16-20-0">16-20-0 (เร่งราก)</option>
+                                    <option value="0-0-60">0-0-60 (เร่งหวาน)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-400 uppercase">พื้นที่ปลูก (ไร่)</label>
+                                <input type="number" id="farmArea" value="1" min="1" class="w-full p-2 bg-slate-50 border rounded-lg text-sm">
+                            </div>
+                        </div>
+                        <div id="calcResult" class="p-4 bg-green-50 rounded-xl border border-green-100 hidden">
+                            <p class="text-xs text-green-700 font-bold mb-1">ปริมาณที่แนะนำ:</p>
+                            <p class="text-2xl font-black text-green-800"><span id="calcValue">0</span> <small class="text-sm font-normal">กิโลกรัม</small></p>
+                            <p class="text-[10px] text-green-600 mt-1">* คำนวณจากธาตุอาหารที่ขาดหายไปมากที่สุด</p>
+                        </div>
+                        <button onclick="calculateFertilizer()" class="w-full py-2 bg-green-700 text-white rounded-lg font-bold hover:bg-green-800 transition-all">คำนวณปริมาณปุ๋ย</button>
+                    </div>
+                </div>
+
+                <!-- จำลองค่าเซนเซอร์ -->
+                <div class="bg-slate-800 p-6 rounded-2xl shadow-sm text-white">
+                    <h3 class="font-bold mb-4 italic flex items-center gap-2">
+                        <span class="bg-slate-700 p-2 rounded-lg">🤖</span> จำลองค่าจากเซนเซอร์ (Simulation)
+                    </h3>
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div><label class="text-[9px] text-slate-400 uppercase">N</label><input type="range" id="simN" min="0" max="150" value="15" oninput="runSimulation()" class="w-full accent-green-500"></div>
+                        <div><label class="text-[9px] text-slate-400 uppercase">P</label><input type="range" id="simP" min="0" max="150" value="50" oninput="runSimulation()" class="w-full accent-green-500"></div>
+                        <div><label class="text-[9px] text-slate-400 uppercase">K</label><input type="range" id="simK" min="0" max="200" value="90" oninput="runSimulation()" class="w-full accent-green-500"></div>
+                        <div><label class="text-[9px] text-slate-400 uppercase">pH</label><input type="range" id="simPH" min="0" max="14" step="0.1" value="5.2" oninput="runSimulation()" class="w-full accent-green-500"></div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 text-center">* เลื่อนแถบเพื่อดูการเปลี่ยนแปลงของ Dashboard แบบ Real-time</p>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-96">
                     <canvas id="comparisonChart"></canvas>
                 </div>
                 <div class="lg:col-span-1 bg-white p-6 rounded-2xl border border-slate-200 shadow-inner overflow-y-auto max-h-96">
-                    <h3 class="font-bold text-slate-800 mb-4 italic">💡 คำแนะนำการจัดการ</h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-800 italic">💡 คำแนะนำการจัดการ</h3>
+                        <button onclick="exportToText()" class="text-[10px] bg-slate-100 px-2 py-1 rounded hover:bg-slate-200">แชร์ข้อมูล</button>
+                    </div>
                     <div id="adviceContent" class="space-y-3"></div>
                 </div>
             </div>
         </div>
 
-        <div id="settings" class="tab-content space-y-6">
-            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 max-w-4xl mx-auto">
-                <h3 class="text-xl font-bold mb-6 text-green-800 border-b pb-2 italic">⚙️ ปรับแต่งเกณฑ์มาตรฐานรายพืช</h3>
+        <div id="mapTab" class="tab-content space-y-6">
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                <h3 class="text-lg font-bold mb-4 text-green-800 border-b pb-2 italic">📍 เก็บข้อมูลแผนที่แปลงเกษตร</h3>
+                <div id="map" class="mb-4"></div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-1">ชื่อเรียกพื้นที่:</label>
+                        <input type="text" id="locationName" placeholder="เช่น แปลงทุเรียน 1, หน้าบ้าน" class="w-full p-2 bg-white border rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="saveLocation()" class="w-full py-2 bg-green-700 text-white rounded-lg font-bold hover:bg-green-800 transition-all shadow-md">บันทึกตำแหน่งนี้</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                <h3 class="text-lg font-bold mb-4 text-slate-800 border-b pb-2 italic">📋 รายการพื้นที่ที่บันทึกไว้</h3>
+                <div id="savedLocationsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- รายการจะแสดงที่นี่ -->
+                </div>
+            </div>
+        </div>
+
+        <div id="settings" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- แก้ไขเกณฑ์มาตรฐาน -->
+                <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                    <h3 class="text-lg font-bold mb-4 text-green-800 border-b pb-2 italic">⚙️ ปรับแต่งเกณฑ์มาตรฐาน</h3>
                     <div class="space-y-4">
                         <label class="block text-sm font-bold text-slate-600 italic">เลือกพืชที่จะแก้ไข:</label>
                         <select id="editCropSelect" onchange="loadCurrentStandard()" class="w-full p-3 bg-slate-100 rounded-xl outline-none border-2 border-transparent focus:border-green-500"></select>
-                    </div>
-                    
-                    <div class="space-y-4">
+                        
                         <div class="grid grid-cols-2 gap-4">
                             <div><label class="text-[10px] font-bold text-slate-400 uppercase">N Min</label><input type="number" id="setNMin" class="w-full p-2 bg-slate-50 border rounded-lg"></div>
                             <div><label class="text-[10px] font-bold text-slate-400 uppercase">N Max</label><input type="number" id="setNMax" class="w-full p-2 bg-slate-50 border rounded-lg"></div>
@@ -92,134 +182,29 @@
                             <div><label class="text-[10px] font-bold text-slate-400 uppercase">pH Min</label><input type="number" step="0.1" id="setPHMin" class="w-full p-2 bg-slate-50 border rounded-lg"></div>
                             <div><label class="text-[10px] font-bold text-slate-400 uppercase">pH Max</label><input type="number" step="0.1" id="setPHMax" class="w-full p-2 bg-slate-50 border rounded-lg"></div>
                         </div>
-                        <button onclick="saveNewStandard()" class="w-full bg-green-600 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition-all shadow-lg">บันทึกข้อมูลมาตรฐาน</button>
+                        <div class="flex gap-2">
+                            <button onclick="saveNewStandard()" class="flex-1 bg-green-600 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition-all shadow-lg">บันทึกเกณฑ์</button>
+                            <button onclick="deleteCrop()" class="bg-rose-100 text-rose-600 font-bold px-4 rounded-xl hover:bg-rose-200">ลบพืช</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- เพิ่มพืชใหม่ -->
+                <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200">
+                    <h3 class="text-lg font-bold mb-4 text-slate-800 border-b pb-2 italic">➕ เพิ่มพืชชนิดใหม่</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-600 italic">ชื่อพืช:</label>
+                            <input type="text" id="newCropName" placeholder="เช่น ทุเรียน, ยางพารา" class="w-full p-3 bg-slate-100 rounded-xl outline-none border-2 border-transparent focus:border-blue-500">
+                        </div>
+                        <p class="text-[10px] text-slate-400">* ระบบจะใช้ค่ามาตรฐานเริ่มต้น คุณสามารถแก้ไขได้หลังจากเพิ่มแล้ว</p>
+                        <button onclick="addNewCrop()" class="w-full bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-all shadow-lg">เพิ่มพืชเข้าสู่ระบบ</button>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <script>
-        // --- ฐานข้อมูลเริ่มต้น ---
-        let cropDatabase = {
-            rice: { n: { min: 21, max: 30 }, p: { min: 25, max: 45 }, k: { min: 80, max: 120 }, ph: { min: 5.5, max: 6.5 }, name: "ข้าว" },
-            corn: { n: { min: 50, max: 80 }, p: { min: 25, max: 40 }, k: { min: 40, max: 70 }, ph: { min: 5.8, max: 7.0 }, name: "ข้าวโพด" },
-            sugarcane: { n: { min: 31, max: 50 }, p: { min: 25, max: 50 }, k: { min: 40, max: 120 }, ph: { min: 4.0, max: 6.0 }, name: "อ้อย" }
-        };
-
-        let sensorData = { n: 15, p: 50, k: 90, ph: 5.2 }; 
-        let chart;
-
-        // --- ระบบสลับแท็บ ---
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            document.getElementById(`btn-${tabName}`).classList.add('active');
-            if(tabName === 'dashboard') updateDashboardUI();
-            if(tabName === 'settings') loadCurrentStandard();
-        }
-
-        // --- ระบบตั้งค่า (หัวใจสำคัญที่แก้ไข) ---
-        function loadCurrentStandard() {
-            const cropKey = document.getElementById('editCropSelect').value;
-            const opt = cropDatabase[cropKey];
-            if (!opt) return;
-
-            document.getElementById('setNMin').value = opt.n.min;
-            document.getElementById('setNMax').value = opt.n.max;
-            document.getElementById('setPMin').value = opt.p.min;
-            document.getElementById('setPMax').value = opt.p.max;
-            document.getElementById('setKMin').value = opt.k.min;
-            document.getElementById('setKMax').value = opt.k.max;
-            document.getElementById('setPHMin').value = opt.ph.min;
-            document.getElementById('setPHMax').value = opt.ph.max;
-        }
-
-        function saveNewStandard() {
-            const cropKey = document.getElementById('editCropSelect').value;
-            
-            cropDatabase[cropKey].n.min = parseFloat(document.getElementById('setNMin').value);
-            cropDatabase[cropKey].n.max = parseFloat(document.getElementById('setNMax').value);
-            cropDatabase[cropKey].p.min = parseFloat(document.getElementById('setPMin').value);
-            cropDatabase[cropKey].p.max = parseFloat(document.getElementById('setPMax').value);
-            cropDatabase[cropKey].k.min = parseFloat(document.getElementById('setKMin').value);
-            cropDatabase[cropKey].k.max = parseFloat(document.getElementById('setKMax').value);
-            cropDatabase[cropKey].ph.min = parseFloat(document.getElementById('setPHMin').value);
-            cropDatabase[cropKey].ph.max = parseFloat(document.getElementById('setPHMax').value);
-
-            alert(`บันทึกเกณฑ์มาตรฐานพืช "${cropDatabase[cropKey].name}" เรียบร้อย!`);
-            switchTab('dashboard'); // เมื่อบันทึกเสร็จให้กลับไปหน้าจอหลัก
-        }
-
-        // --- ระบบแสดงผล Dashboard ---
-        function updateDashboardUI() {
-            const cropKey = document.getElementById('cropSelect').value;
-            const opt = cropDatabase[cropKey];
-            document.getElementById('currentCropName').innerText = opt.name;
-
-            analyzeCard('N', sensorData.n, opt.n);
-            analyzeCard('P', sensorData.p, opt.p);
-            analyzeCard('K', sensorData.k, opt.k);
-            analyzeCard('PH', sensorData.ph, opt.ph);
-
-            if (chart) {
-                chart.data.datasets[1].label = `มาตรฐาน (${opt.name})`;
-                chart.data.datasets[1].data = [opt.n.max, opt.p.max, opt.k.max];
-                chart.update();
-            }
-            generateAdvice(opt);
-        }
-
-        function analyzeCard(id, val, range) {
-            const card = document.getElementById(`card${id}`);
-            document.getElementById(`val${id}`).innerText = val;
-            document.getElementById(`range${id}`).innerText = `เป้าหมาย: ${range.min}-${range.max}`;
-            card.className = "bg-white p-6 rounded-2xl shadow-sm border-b-8 transition-all duration-500";
-            if (val < range.min) card.classList.add('border-rose-500');
-            else if (val > range.max) card.classList.add('border-amber-500');
-            else card.classList.add('border-green-500', 'bg-green-50');
-        }
-
-        function generateAdvice(opt) {
-            const container = document.getElementById('adviceContent');
-            container.innerHTML = '';
-            const check = (val, range, label, msg) => {
-                if (val < range.min) return `<div class="p-3 bg-rose-50 border-l-4 border-rose-500 rounded-lg text-xs">⚠️ <b>${label}ต่ำ:</b> ${msg}</div>`;
-                return '';
-            };
-            container.innerHTML += check(sensorData.n, opt.n, 'N', 'ควรเพิ่มปุ๋ยไนโตรเจน');
-            container.innerHTML += check(sensorData.ph, opt.ph, 'pH', 'ดินเป็นกรด ควรเติมปูนขาว');
-            if (container.innerHTML === '') container.innerHTML = '<p class="text-green-600 font-bold text-center py-4">✅ ดินสมบูรณ์ดี</p>';
-        }
-
-        // --- เตรียมระบบเริ่มต้น ---
-        window.onload = function() {
-            // เติมรายชื่อพืชใน Dropdown
-            const selectors = ['cropSelect', 'editCropSelect'];
-            selectors.forEach(id => {
-                const el = document.getElementById(id);
-                for (let key in cropDatabase) {
-                    el.innerHTML += `<option value="${key}">${cropDatabase[key].name}</option>`;
-                }
-            });
-
-            // สร้างกราฟ
-            const ctx = document.getElementById('comparisonChart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['N', 'P', 'K'],
-                    datasets: [
-                        { label: 'วัดจากแปลง', data: [sensorData.n, sensorData.p, sensorData.k], backgroundColor: '#1e293b', borderRadius: 5 },
-                        { label: 'ค่ามาตรฐาน', data: [0, 0, 0], backgroundColor: '#4ade80', borderRadius: 5 }
-                    ]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-
-            updateDashboardUI();
-        };
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
